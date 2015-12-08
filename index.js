@@ -104,13 +104,56 @@ function splitBankAnswer(xmlString, cb) {
     var parser = new xml2js.Parser();
     parser.parseString(xmlString, (err, data) => {
         if(err) return cb(err, data);
-        console.dir(data);
+        var builder = new xml2js.Builder({rootName: 'bank', headless: true, renderOpts: {'pretty': false}});
+        var xmlBank = builder.buildObject(data['document']['bank'][0]);
+        var res = {
+            xml: xmlBank,
+            sign: data['document']['bank_sign'][0]['_']
+        }
+        return cb(false, res);
     });
 }
 
-function processBankAnswer(config, xmlString) {
-
+function parseBankAnswer(config, xmlString, cb) {
+    splitBankAnswer(xmlString, (err, data) => {
+        if(err) return cb(err, data);
+        verify(data.xml, data.sign, config.publicKeyFile, (err, result) => {
+            if(err) return cb(err, result);
+            var parser = new xml2js.Parser();
+            parser.parseString(data.xml, (err, answer) => {
+                if(err) return cb(err, answer);
+                var res = {
+                    customer: {
+                        name: answer.bank.customer[0]['$'].name,
+                        mail: answer.bank.customer[0]['$'].mail,
+                        phone: answer.bank.customer[0]['$'].phone
+                    },
+                    merchant: {
+                        name: answer.bank.customer[0].merchant[0]['$'].name
+                    },
+                    order: {
+                        id: answer.bank.customer[0].merchant[0].order[0]['$'].order_id,
+                        amount: answer.bank.customer[0].merchant[0].order[0]['$'].amount,
+                        currency: answer.bank.customer[0].merchant[0].order[0]['$'].currency,
+                    },
+                    department: {
+                        amount: answer.bank.customer[0].merchant[0].order[0].department[0]['$'].amount
+                    },
+                    payment: {
+                        timestamp: answer.bank.results[0]['$'].timestamp,
+                        merchant_id: answer.bank.results[0].payment[0]['$'].merchant_id,
+                        amount: answer.bank.results[0].payment[0]['$'].amount,
+                        reference: answer.bank.results[0].payment[0]['$'].reference,
+                        approval_code: answer.bank.results[0].payment[0]['$'].approval_code,
+                        response_code: answer.bank.results[0].payment[0]['$'].response_code
+                    },
+                    check_result: result?'SIGN_GOOD':'SIGN_BAD'
+                }
+                return cb(false, res);
+            });
+        });
+    });
 }
 
 exports.getSignedOrderBase64 = getSignedOrderBase64;
-exports.splitBankAnswer = splitBankAnswer;
+exports.parseBankAnswer = parseBankAnswer;
