@@ -12,10 +12,21 @@ function sign(data, privateKeyFile, privateKeyPass, cb) {
             key: pkData.toString('ascii'),
             passphrase: privateKeyPass
         };
+
         var sign = Crypto.createSign('RSA-SHA1');
         sign.update(data);
+
+        // После подписания требуется инвертировать строку
+
+        var revsign = sign.sign(pk);
+        revsign.reverse();
+        
+        // Затем кодируем в base64
+
+        var revstr = revsign.toString('base64');
+
         try {
-            return cb(false, sign.sign(pk, 'base64'));
+            return cb(false, revstr);
         } catch (e) {
             return cb(true, e.message);
         }
@@ -99,6 +110,36 @@ function getSignedOrderBase64(config, order_id, order_amount, order_currency, cb
         return cb(false, buf.toString('base64'));
     });
 }
+
+// Создание xml товара
+
+
+function itemXml(item_number, item_name, item_quantity, item_amount) {
+    var itObj = itemObj(item_number, item_name, item_quantity, item_amount);
+    var builder = new xml2js.Builder({rootName: 'document', headless: true, renderOpts: {'pretty': false}});
+    return builder.buildObject(itObj);
+}
+
+function itemObj(item_number, item_name, item_quantity, item_amount) {
+    return {
+        item: [{
+            '$': {
+                number: item_number,
+                name: item_name,
+                quantity: item_quantity,
+                amount: item_amount
+            }
+        }]
+    }
+}
+
+function itemObjBase64(item_number, item_name, item_quantity, item_amount) {
+    var itex = itemXml(item_number, item_name, item_quantity, item_amount);
+    var itexbase = new Buffer(itex);
+    var itexstring = itexbase.toString('base64');
+    return itexstring;
+}
+
 
 function splitBankAnswer(xmlString, cb) {
     var parser = new xml2js.Parser();
